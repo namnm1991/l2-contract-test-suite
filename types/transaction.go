@@ -5,7 +5,7 @@ import (
 	"math/big"
 )
 
-type OpType uint
+type OpType uint8
 
 const (
 	NoOp OpType = iota
@@ -27,8 +27,12 @@ type Fee struct {
 	Exp     uint8
 }
 
+// 10 bit for mantisa, 6 bit for exp
 func (f *Fee) toBytes() []byte {
-	return nil
+	out := uint16(0)
+	out = out | (f.Mantisa << 6)
+	out = out | (uint16(f.Exp))
+	return common.Uint16ToByte(out)
 }
 
 func (f *Fee) MarshalText() ([]byte, error) {
@@ -48,7 +52,7 @@ func (a *Amount) toBytes() []byte {
 	var out []byte
 	out = append(out, common.Uint32ToBytes(a.Mantisa)...)
 	out = append(out, common.Uint8ToByte(a.Exp))
-	return nil
+	return out
 }
 
 func (a *Amount) MarshalText() ([]byte, error) {
@@ -59,7 +63,7 @@ func (a *Amount) MarshalText() ([]byte, error) {
 }
 
 type Settlement1 struct {
-	opType       OpType
+	OpType       OpType
 	Token1       uint16
 	Token2       uint16
 	Account1     uint32
@@ -76,8 +80,14 @@ type Settlement1 struct {
 	ValidPeriod2 uint32
 }
 
-func (s *Settlement1) toBytes() []byte {
+func (s *Settlement1) ToBytes() []byte {
 	var out []byte
+	// the first 3 bytes, 4 bit opType, 10 bits token1, 10 bits token2
+	head := uint32(0)
+	head = head | (uint32(s.OpType) << 20)
+	head = head | (uint32(s.Token1) << 10)
+	head = head | (uint32(s.Token2))
+	out = append(out, common.Uint32ToBytes(head)[1:]...)
 	out = append(out, common.Uint32ToBytes(s.Account1)...)
 	out = append(out, common.Uint32ToBytes(s.Account2)...)
 	out = append(out, s.Amount1.toBytes()...)
@@ -88,7 +98,12 @@ func (s *Settlement1) toBytes() []byte {
 	out = append(out, s.Fee2.toBytes()...)
 	out = append(out, common.Uint32ToBytes(s.ValidSince1)...)
 	out = append(out, common.Uint32ToBytes(s.ValidSince2)...)
-	out = append(out, common.Uint32ToBytes(s.ValidPeriod1)...)
-	out = append(out, common.Uint32ToBytes(s.ValidPeriod2)...)
+
+	data1 := common.Uint32ToBytes(s.ValidPeriod1 << 4)
+	data2 := common.Uint32ToBytes(s.ValidPeriod2)
+	var tmp  byte = data1[3] | data2[0]
+	out = append(out, data1[:3]...)
+	out = append(out, tmp)
+	out = append(out, data2[1:]...)
 	return out
 }
