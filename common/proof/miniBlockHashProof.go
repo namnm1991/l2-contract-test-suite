@@ -1,12 +1,11 @@
 package proof
 
 import (
-	"fmt"
-	util "github.com/KyberNetwork/l2-contract-test-suite/common"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 
+	util "github.com/KyberNetwork/l2-contract-test-suite/common"
 	"github.com/KyberNetwork/l2-contract-test-suite/types"
 )
 
@@ -50,7 +49,6 @@ func BuildBlockInfoProof(blks []common.Hash, miniBlockIndex uint) hexutil.Bytes 
 		size = (size + 1) / 2
 		count++
 	}
-	fmt.Println(tmp[0].Hex())
 	proof[0] = util.Uint8ToByte(count)
 	return proof
 }
