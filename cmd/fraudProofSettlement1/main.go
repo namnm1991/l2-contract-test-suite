@@ -2,13 +2,13 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/KyberNetwork/l2-contract-test-suite/common/proof"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"io/ioutil"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 
+	"github.com/KyberNetwork/l2-contract-test-suite/common/proof"
 	"github.com/KyberNetwork/l2-contract-test-suite/types"
 	"github.com/KyberNetwork/l2-contract-test-suite/types/blockchain"
 )
@@ -145,7 +145,7 @@ func buildTest2() *FraudProofTestSuit {
 	preStateData := bc.GetStateData()
 
 	var txs []types.Transaction
-	for i := 0; i < 25; i++ {
+	for i := 0; i < 20; i++ {
 		txs = append(txs, &types.Settlement1{
 			OpType:   types.SettlementOp11,
 			Token1:   1,
@@ -169,11 +169,11 @@ func buildTest2() *FraudProofTestSuit {
 				Exp:     3,
 			},
 			Fee1: types.Fee{
-				Mantisa: 7,
-				Exp:     3,
+				Mantisa: 1,
+				Exp:     2,
 			},
 			Fee2: types.Fee{
-				Mantisa: 4,
+				Mantisa: 1,
 				Exp:     2,
 			},
 			ValidSince1:  1600661872,
