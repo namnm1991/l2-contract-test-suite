@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -58,6 +59,7 @@ type Blockchain struct {
 	accountMax uint32
 	looState   *LeftOverOrderList
 	looMax     uint64
+	numDeposit uint64
 }
 
 type StateData struct {
@@ -133,6 +135,9 @@ func (bc *Blockchain) AddMiniBlock(block *types.MiniBlock) []hexutil.Bytes {
 			proof, fee := bc.handleSettlement1(obj)
 			proofs = append(proofs, proof)
 			totalFee = totalFee.Add(totalFee, fee)
+		case *types.DepositOp:
+			proof := bc.handleDeposit(obj)
+			proofs = append(proofs, proof)
 		default:
 			panic("unsupported type")
 		}
@@ -142,6 +147,33 @@ func (bc *Blockchain) AddMiniBlock(block *types.MiniBlock) []hexutil.Bytes {
 	//TODO: build commitment here
 	block.Commitment = common.HexToHash(zeroHash)
 	return proofs
+}
+
+func (bc *Blockchain) handleDeposit(op *types.DepositOp) (proof hexutil.Bytes) {
+	account := bc.state.accounts[op.AccountID]
+	if account == nil {
+		panic("empty account")
+	}
+
+	_, accountSiblings := bc.state.tree.GetProof(uint64(op.AccountID))
+	proof = appendSiblings(proof, accountSiblings)
+	pubAccountHash := account.GetPubAccountHash()
+	proof = append(proof, pubAccountHash.Bytes()...)
+	// update account tree
+	tokenAmount, tokenSiblings := account.tree.GetProof(uint64(op.TokenID))
+	proof = appendTokenProof(proof, tokenAmount, tokenSiblings)
+	account.tree.Update(uint64(op.TokenID), util.AddAmount(tokenAmount, op.Amount))
+	// update bc tree
+	accountHash := crypto.Keccak256Hash(account.tree.rootHash().Bytes(), pubAccountHash.Bytes())
+	bc.state.tree.Update(uint64(op.AccountID), accountHash)
+
+	proof = append(proof, util.Uint32ToBytes(op.AccountID)...)
+	proof = append(proof, util.Uint16ToBytes(op.TokenID)...)
+	proof = append(proof, common.BigToHash(op.Amount).Bytes()...)
+
+	op.DepositID = bc.numDeposit
+	bc.numDeposit++
+	return proof
 }
 
 func (bc *Blockchain) handleSettlement1(op *types.Settlement1) (proof hexutil.Bytes, fee *big.Int) {
@@ -216,8 +248,12 @@ func (bc *Blockchain) handleTotalFee(fee *big.Int) (proof hexutil.Bytes) {
 	_, accountSiblings := bc.state.tree.GetProof(uint64(AdminIndex))
 	proof = appendSiblings(proof, accountSiblings)
 
+	fmt.Println(proof)
+
 	pubAccountHash := account.GetPubAccountHash()
 	proof = append(proof, pubAccountHash.Bytes()...)
+
+	fmt.Println(account.tree.rootHash().Hex(), pubAccountHash.Hex(), bc.state.tree.rootHash().Hex())
 
 	feeAmount, feeSiblings := account.tree.GetProof(uint64(FeeTokenIndex))
 	proof = appendTokenProof(proof, feeAmount, feeSiblings)
@@ -263,4 +299,18 @@ func NewLOOList() *LeftOverOrderList {
 		loos: make(map[uint64]*types.LeftOverOrder),
 		tree: NewTree(LOOTreeDeep),
 	}
+}
+
+type BlockData struct {
+	MiniBlocks      []*types.MiniBlock
+	Timestamp       uint32
+	MiniBlockNumber uint
+	Proof           *FraudProof
+}
+
+type FraudProof struct {
+	PrevStateData      *StateData
+	PrevStateHashProof hexutil.Bytes
+	MiniBlockProof     hexutil.Bytes
+	ExecutionProof     []hexutil.Bytes
 }
