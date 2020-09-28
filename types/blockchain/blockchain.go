@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -138,6 +137,9 @@ func (bc *Blockchain) AddMiniBlock(block *types.MiniBlock) []hexutil.Bytes {
 		case *types.DepositOp:
 			proof := bc.handleDeposit(obj)
 			proofs = append(proofs, proof)
+		case *types.DepositToNewOp:
+			proof := bc.handleDepositToNew(obj)
+			proofs = append(proofs, proof)
 		default:
 			panic("unsupported type")
 		}
@@ -173,6 +175,29 @@ func (bc *Blockchain) handleDeposit(op *types.DepositOp) (proof hexutil.Bytes) {
 
 	op.DepositID = bc.numDeposit
 	bc.numDeposit++
+	return proof
+}
+
+func (bc *Blockchain) handleDepositToNew(op *types.DepositToNewOp) (proof hexutil.Bytes) {
+	bc.accountMax++
+	accountID := bc.accountMax
+	account := bc.state.accounts[accountID]
+	if account != nil {
+		panic("account existed")
+	}
+	_, siblings := bc.state.tree.GetProof(uint64(accountID))
+
+	account = NewAccount(op.PubKey, op.WithdrawTo)
+	account.tree.Update(uint64(op.TokenID), common.BigToHash(op.Amount))
+	account.GetPubAccountHash()
+
+	accountHash := crypto.Keccak256Hash(account.tree.rootHash().Bytes(), account.GetPubAccountHash().Bytes())
+	bc.state.tree.Update(uint64(accountID), accountHash)
+	proof = append(proof, op.PubKey...)
+	proof = append(proof, op.WithdrawTo.Bytes()...)
+	proof = append(proof, util.Uint16ToByte(op.TokenID)...)
+	proof = append(proof, common.BigToHash(op.Amount).Bytes()...)
+	proof = appendSiblings(proof, siblings)
 	return proof
 }
 
@@ -248,12 +273,8 @@ func (bc *Blockchain) handleTotalFee(fee *big.Int) (proof hexutil.Bytes) {
 	_, accountSiblings := bc.state.tree.GetProof(uint64(AdminIndex))
 	proof = appendSiblings(proof, accountSiblings)
 
-	fmt.Println(proof)
-
 	pubAccountHash := account.GetPubAccountHash()
 	proof = append(proof, pubAccountHash.Bytes()...)
-
-	fmt.Println(account.tree.rootHash().Hex(), pubAccountHash.Hex(), bc.state.tree.rootHash().Hex())
 
 	feeAmount, feeSiblings := account.tree.GetProof(uint64(FeeTokenIndex))
 	proof = appendTokenProof(proof, feeAmount, feeSiblings)
